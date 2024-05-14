@@ -131,19 +131,14 @@ class target_reader:
         gray = cv2.resize(gray, (gray_width, height))
 
         # Finds edges of target using grayscale image
-        gray = cv2.bilateralFilter(gray,
-                                   filter_d,
-                                   filter_sigma,
-                                   filter_sigma)
+        gray = cv2.bilateralFilter(gray, filter_d, filter_sigma, filter_sigma)
         edges = cv2.Canny(gray, canny_t1, canny_t2)
         kernel = np.ones((dilate_kernel, dilate_kernel), np.uint8)
         edges = cv2.dilate(edges, kernel, iterations=1)
 
         # Finds the longest contour that can be approximated by four coordinates
         # Returns error status if no such contour exists
-        _, contours, _ = cv2.findContours(edges,
-                                          cv2.RETR_LIST,
-                                          cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         paper = None
         max_perim = 0
         for c in contours:
@@ -153,7 +148,7 @@ class target_reader:
                 if len(approx) == 4:
                     paper = approx
                     max_perim = perim
-        if type(paper) == type(None):
+        if paper is None:
             return True
 
         # Reorders corner points to Top Left, Top Right, Bottom Right,
@@ -180,7 +175,7 @@ class target_reader:
             [new_w, 0],
             [new_w, new_h],
             [0, new_h]
-        ], dtype = 'float32')
+        ], dtype='float32')
         M = cv2.getPerspectiveTransform(bounds, new_bounds)
         img = cv2.warpPerspective(img, M, (new_w, new_h))
 
@@ -194,6 +189,7 @@ class target_reader:
         self.image = img
         self.stage_images.append(img.copy())
         return None
+
 
     def standardize_size(self):
         '''
@@ -224,9 +220,7 @@ class target_reader:
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
             # Finds circle contour and contour center
-            _, contours, __ = cv2.findContours(mask,
-                                               cv2.RETR_EXTERNAL,
-                                               cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             areas = [cv2.contourArea(contour) for contour in contours]
             try:
                 idx = np.argsort(areas)[-1]
@@ -309,9 +303,7 @@ class target_reader:
                                                     rng['high']), circle)
 
             # Finds contour that best matches estimated circle area
-            _, contours, __ = cv2.findContours(circle,
-                                               cv2.RETR_LIST,
-                                               cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(circle, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             areas = [cv2.contourArea(c) for c in contours]
             idx = np.argmin(np.abs(areas - target_area))
             contour = contours[idx]
@@ -405,7 +397,7 @@ class target_reader:
         '''
         # Sets blob detection parameters
         params = cv2.SimpleBlobDetector_Params()
-        params.minDistBetweenBlobs = 0
+        params.minDistBetweenBlobs = 1
         params.filterByArea = True
         params.minArea = 30
         params.maxArea = 600
@@ -496,7 +488,7 @@ class target_reader:
             clus_df['y'] = (np.sin(clus_df['rot']) * clus_df['vec_x'] +
                             np.cos(clus_df['rot']) * clus_df['vec_y'] +
                             clus_df['y'])
-            df = df.append(clus_df[['x', 'y', 'radius']], sort=False)
+            df = pd.concat([df, clus_df[['x', 'y', 'radius']]], ignore_index=True)
 
         # Calculates score for each shot
         df['error'] = np.sqrt(np.square(center - df['x']) +
